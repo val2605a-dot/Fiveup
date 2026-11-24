@@ -1,1 +1,320 @@
 
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FIVEUP</title>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: Arial, sans-serif;
+    }
+
+    body {
+      background: #080f20;
+      color: white;
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 25px;
+    }
+
+    .logo {
+      font-size: 28px;
+      font-weight: bold;
+      color: #2585ff;
+    }
+
+    .card {
+      background: #111d34;
+      padding: 20px;
+      border-radius: 16px;
+      margin-bottom: 18px;
+    }
+
+    h2 {
+      margin-bottom: 15px;
+    }
+
+    input {
+      width: 100%;
+      padding: 14px;
+      margin: 8px 0;
+      border: 1px solid #263957;
+      border-radius: 10px;
+      background: #0b1528;
+      color: white;
+      font-size: 16px;
+    }
+
+    button {
+      border: none;
+      border-radius: 10px;
+      padding: 13px;
+      background: #1677ff;
+      color: white;
+      font-size: 15px;
+      font-weight: bold;
+      width: 100%;
+      margin-top: 10px;
+      cursor: pointer;
+    }
+
+    .secondary {
+      background: #263957;
+    }
+
+    .tabs {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 7px;
+      margin: 20px 0;
+    }
+
+    .tabs button {
+      font-size: 12px;
+      padding: 12px 4px;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    .muted {
+      color: #9aabc5;
+      font-size: 14px;
+      margin-top: 8px;
+    }
+
+    #message {
+      margin: 12px 0;
+      color: #70b2ff;
+    }
+  </style>
+</head>
+
+<body>
+
+  <header>
+    <div class="logo">FIVEUP</div>
+    <div id="accountStatus">Non connecté</div>
+  </header>
+
+  <div id="authSection" class="card">
+    <h2>Bienvenue sur FIVEUP ⚽</h2>
+    <p class="muted">Connecte-toi ou crée ton compte.</p>
+
+    <input id="username" placeholder="Ton pseudo">
+    <input id="email" type="email" placeholder="Adresse e-mail">
+    <input id="password" type="password" placeholder="Mot de passe">
+
+    <button onclick="signup()">Créer mon compte</button>
+    <button class="secondary" onclick="login()">Se connecter</button>
+
+    <p id="message"></p>
+  </div>
+
+  <main id="appSection" class="hidden">
+
+    <nav class="tabs">
+      <button onclick="showTab('home')">Accueil</button>
+      <button onclick="showTab('matches')">Matchs</button>
+      <button onclick="showTab('create')">Créer</button>
+      <button onclick="showTab('profile')">Profil</button>
+    </nav>
+
+    <section id="home" class="card">
+      <h2>Salut et bienvenue ! ⚽</h2>
+      <p>Prêt à trouver ton prochain five ?</p>
+      <p class="muted">Rejoins la communauté FIVEUP.</p>
+    </section>
+
+    <section id="matches" class="card hidden">
+      <h2>Les matchs</h2>
+      <p class="muted">Les matchs disponibles arriveront ici.</p>
+    </section>
+
+    <section id="create" class="card hidden">
+      <h2>Créer un match</h2>
+      <p class="muted">Cette fonctionnalité sera activée dans une prochaine étape.</p>
+    </section>
+
+    <section id="profile" class="card hidden">
+      <h2>Mon profil</h2>
+      <p id="profileName"></p>
+      <button class="secondary" onclick="logout()">Déconnexion</button>
+    </section>
+
+  </main>
+
+  <script>
+    const SUPABASE_URL = "https://mxcghbhepaubfywhkejj.supabase.co";
+    const SUPABASE_KEY = "sb_publishable_K3z7zh3_vKqAiUjuVldDjw_7skEoSAP";
+
+    const db = window.supabase.createClient(
+      SUPABASE_URL,
+      SUPABASE_KEY
+    );
+
+    let currentUser = null;
+
+    function showMessage(text) {
+      document.getElementById("message").textContent = text;
+    }
+
+    async function signup() {
+      const username = document.getElementById("username").value.trim();
+      const email = document.getElementById("email").value.trim();
+      const password = document.getElementById("password").value;
+
+      if (!username || !email || !password) {
+        showMessage("Remplis tous les champs.");
+        return;
+      }
+
+      if (password.length < 6) {
+        showMessage("Le mot de passe doit faire au moins 6 caractères.");
+        return;
+      }
+
+      showMessage("Création du compte...");
+
+      const { data, error } = await db.auth.signUp({
+        email: email,
+        password: password,
+        options: {
+          data: {
+            username: username
+          }
+        }
+      });
+
+      if (error) {
+        showMessage(error.message);
+        return;
+      }
+
+      if (data.session) {
+        await saveProfile(data.user, username);
+        showMessage("Compte créé !");
+        await refreshUser();
+      } else {
+        showMessage("Compte créé ! Vérifie tes e-mails pour confirmer ton compte.");
+      }
+    }
+
+    async function login() {
+      const email = document.getElementById("email").value.trim();
+      const password = document.getElementById("password").value;
+
+      if (!email || !password) {
+        showMessage("Entre ton e-mail et ton mot de passe.");
+        return;
+      }
+
+      showMessage("Connexion...");
+
+      const { data, error } = await db.auth.signInWithPassword({
+        email: email,
+        password: password
+      });
+
+      if (error) {
+        showMessage(error.message);
+        return;
+      }
+
+      const username =
+        data.user.user_metadata.username ||
+        data.user.email.split("@")[0];
+
+      await saveProfile(data.user, username);
+      await refreshUser();
+      showMessage("Connexion réussie !");
+    }
+
+    async function saveProfile(user, username) {
+      const { error } = await db
+        .from("profiles")
+        .upsert({
+          id: user.id,
+          username: username
+        });
+
+      if (error) {
+        console.error("Erreur profil :", error.message);
+      }
+    }
+
+    async function refreshUser() {
+      const { data } = await db.auth.getUser();
+      currentUser = data.user;
+
+      const authSection = document.getElementById("authSection");
+      const appSection = document.getElementById("appSection");
+
+      if (currentUser) {
+        authSection.classList.add("hidden");
+        appSection.classList.remove("hidden");
+
+        document.getElementById("accountStatus").textContent = "Connecté";
+
+        const username =
+          currentUser.user_metadata.username ||
+          currentUser.email.split("@")[0];
+
+        document.getElementById("profileName").textContent =
+          "Pseudo : " + username;
+      } else {
+        authSection.classList.remove("hidden");
+        appSection.classList.add("hidden");
+        document.getElementById("accountStatus").textContent =
+          "Non connecté";
+      }
+    }
+
+    function showTab(tabName) {
+      const tabs = ["home", "matches", "create", "profile"];
+
+      tabs.forEach(function(tab) {
+        document.getElementById(tab).classList.add("hidden");
+      });
+
+      document.getElementById(tabName).classList.remove("hidden");
+    }
+
+    async function logout() {
+      const { error } = await db.auth.signOut();
+
+      if (error) {
+        alert(error.message);
+        return;
+      }
+
+      currentUser = null;
+      await refreshUser();
+      showMessage("Tu es déconnecté.");
+    }
+
+    db.auth.onAuthStateChange(function(event, session) {
+      currentUser = session ? session.user : null;
+      refreshUser();
+    });
+
+    refreshUser();
+  </script>
+
+</body>
+</html>
+
